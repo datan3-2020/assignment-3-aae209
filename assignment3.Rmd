@@ -1,6 +1,6 @@
 ---
 title: "Statistical assignment 3"
-author: "Alhussein Elrayah" [130368]"
+author: "[Alhussein Elrayah] [130368]"
 date: "[16/02/2020]"
 output: github_document
 ---
@@ -26,7 +26,6 @@ The only thing you need to do for this code to work on your computer is to provi
 ```{r}
 library(tidyverse)
 library(data.table)
-
 # data.table is faster compared to readr so we'll use it in this case (the function fread()). You need to install this package first to be able to run this code.
 
 # create a vector with the file names and paths
@@ -73,9 +72,29 @@ for (i in 1:7) {
 Now we have got the data from all 7 waves in the same data frame **all7** in the wide format. Note that the panel is unbalanced, i.e. we included all people who participated in at least one wave of the survey. Reshape the data to the long format. The resulting data frame should have six columns for six variables.
 
 ```{r}
+
+## Reshaping to long format for later separation
+
 Long <- all7 %>%
-  ...
-Long <- Wide %>%
+ pivot_longer(a_memorig:g_vote6,
+   names_to = "Variable Name",
+   values_to = "Value",
+ )
+
+# Using separate() to separate the wave identifier(a,b,c...) from the variable names
+
+Long <- Long %>%
+          separate("Variable Name", into = c("wave", "variable"), sep = "_") 
+
+
+## Reshaping to wide format
+
+Long <- Long %>%
+        pivot_wider(names_from = "variable", values_from = "Value")
+  
+
+view(Long)
+
 
 ```
 
@@ -84,31 +103,65 @@ Long <- Wide %>%
 Now we want to filter the data keeping only respondents from the original UKHLS sample for Great Britain (memorig == 1). We also want to clean the variables for sex (recoding it to "male" or "female") and political interest (keeping the values from 1 to 4 and coding all negative values as missing). Tabulate *sex* and *vote6* to make sure your recodings were correct.
 
 ```{r}
+
 Long <- Long %>%
+
         filter(memorig == 1) %>%
         mutate(sex = recode(sex,
                             "1" = "male",
                                              "2" = "female",
                                              "-9" = "NA")) %>%
-mutate(vote6 = case_when(
-                 between(vote6, 0, -9) ~ NA)) %>%
+  
+mutate(vote6 = recode(vote6,
+                      '-1' = NA_integer_,
+                      '-8' = NA_integer_,
+                      '-7' = NA_integer_,
+                      '-2' = NA_integer_,
+                      '-9' = NA_integer_))
 
-Long %>%
-       
-Long %>%
+
+
+  
+
+View(Long)
         
 
 ```
 
 ## Calculate mean political interest by sex and wave (10 points)
-
 Political interest is an ordinal variable, but we will treat it as interval and calculate mean political interest for men and women in each wave.
 
 ```{r}
-meanVote6 <- Long %>%
-        ...
+
+    
+            
+
+mean.sx <- Long %>%
+               group_by(sex) %>%
+               summarise(
+                 meansex = mean(vote6, na.rm = TRUE)
+               )
+
+view(mean.sx)
+
+
+mean.wv <- Long %>%
+               group_by(wave) %>%
+               summarise(
+                 meansex = mean(vote6, na.rm = TRUE)
+               )
+  
+  
+view(mean.wv)
+
+meanvote6 <- Long %>%
+               group_by(sex, wave) %>%
+               summarise(
+                 mean = mean(vote6, na.rm = TRUE)
+               )
+ 
+view(meanvote6)           
         
-meanVote6
 ```
 
 ## Reshape the data frame with summary statistics (20 points)
@@ -125,9 +178,34 @@ In the cells of this table you should have mean political interest by sex and wa
 Write a short interpretation of your findings.
 
 ```{r}
-meanVote6 %>%
-        ...
+meanvote6 <- Long %>%
+               group_by(sex, wave) %>%
+               summarise(
+                 mean = mean(vote6, na.rm = TRUE)
+               )
+
+## Removing missing values(NA)
+
+meanvote6 <- meanvote6 %>%
+             filter(sex == "male"| sex == "female")
+
+meanvote6 ## Remeber to put table at end so it can appear in Markdown
+
+## Reshaping long data frame to wide data frame
+
+meanvote6.wide <- meanvote6 %>%
+        pivot_wider(names_from = "wave", values_from = "mean")
+
+
+meanvote6.wide
+
+
+ 
 ```
+In general, the level of political stability is 3(rounded to 1 significant figure) for all waves, for both males and females, indicating that voters generally are not very interested in politics. For females, the number is always slightly higher than males in all 7 waves indicating a lower interest in politics for females when compared to males. This difference may be accounted for by the missing values. Also, according to one study, females are found to state a general disintrest in politics in questionnaires, when in fact they can be very interested but in more specific poltiical topics, such as abortion, when compared to men.
+
+Source: https://blogs.lse.ac.uk/europpblog/2019/10/25/are-men-really-more-interested-in-politics-than-women-or-are-we-just-asking-the-wrong-questions/
+
 
 ## Estimate stability of political interest (30 points)
 
@@ -152,6 +230,116 @@ Write the R code that does the following.
 5. Write a short interpretation of your findings.
 
 ```{r}
-...
+## 1. Using filter() to keep only the respondents with non-missing values for political interest in all seven waves.
+
+
+
+view(all7)
+
+
+Long2 <- all7 %>%
+               filter(!is.na(a_vote6) &
+               !is.na(b_vote6) & 
+                        !is.na(c_vote6)&
+                        !is.na(d_vote6)&
+                        !is.na(e_vote6)&
+                      !is.na(f_vote6)&
+                     !is.na(g_vote6))
+         
+
+view(Long2)
+
+## 2. Delta for each person
+
+Long2 <- Long2 %>%
+
+mutate(delta = abs(b_vote6-a_vote6)+ 
+         abs(c_vote6-b_vote6) + 
+         abs(d_vote6-c_vote6) + 
+         abs(e_vote6-d_vote6) + 
+         abs(f_vote6-e_vote6) +
+         abs(g_vote6-f_vote6))
+
+
+## 3. Mean delta for men and women in data set
+
+
+Long2sx <- Long2 %>%
+ pivot_longer(a_memorig:g_vote6,
+   names_to = "Variable Name",
+   values_to = "Value",
+ )
+
+Long2sx <- Long2sx %>%
+          separate("Variable Name", into = c("wave", "variable"), sep = "_")
+
+## Then reshape it again and recode the males and female variables to make it easier to interpret
+
+Long2sx <- Long2sx %>%
+        pivot_wider(names_from = "variable", values_from = "Value") %>%
+        mutate(sex = recode(sex,
+                            "1" = "male",
+                                             "2" = "female",
+                                             "-9" = "NA"))
+view(Long2sx)
+## Finding the means for males and females
+
+mean.sx2 <- Long2sx %>%
+             group_by(sex) %>%
+               summarise(
+                 mean = mean(delta, na.rm = TRUE)
+               )
+
+view((mean.sx2))
+
+
+
+
+## 4. Calculate mean Delta by age (at wave 1) and plot the local polynomial curve showing the association between age at wave 1 and mean Delta. You can use either **ggplot2** or the *scatter.smooth()* function from base R
+
+
+## Calculating the mean Delta by age 
+
+Long2age <- Long2 %>%
+            select(a_age_dv, delta)  %>%
+            group_by(a_age_dv) %>%
+            summarise(
+            mean = mean(delta, na.rm = TRUE))
+
+View(Long2age)
+
+
+## ggplot
+
+require(ggplot2)
+
+require(methods)
+## plot base + points
+p <- ggplot(Long2age, aes(x = a_age_dv, y = mean)) + geom_point() + stat_smooth(method = "lm",
+                                                                                formula = y ~ x, size = 1) +
+xlab("Age") +  ylab("Mean of Delta") + ylim(0,10)
+
+print(p)
+
+
+
 
 ```
+
+5. Write a short interpretation of your findings.
+
+For all 7 waves, the mean of delta for males is 4.4(to 1 d.p.) and for females it is 3.6(to 1 d.p.). The slightly higher delta for males indicates more instability in political interest from wave to wave. It is important to note that we have removed those who have not particpated in all 7 waves for ease of interpretation, and thus, this difference may be accounted for because of this. 
+
+As for our graph for age in wave one, the line shows that, on average, for wave 1 the delta was around 5 but seems to decrease slightly for older age groups. This indicates that from wave 1 to wave 7, a person who started off in an older age group in wave 1 will less likely to change their levels of political interest, though this difference is slight.
+
+However, for ages over 80 in wave 1, there appears to be high levels of instability in political interest over the course of the study when compared to the average. This could be caused by periodic illness preventing political participation in one wave, followed by high political pariticpation in another wave when healthy, due to retirement providing more free time for political engagment.
+
+Also, another group which shows high poltical instability when compared to the average is under-25s. This could be due to signficant changes in the situation of that group from wave to wave(i.e. going to university, starting their first job, moving out of their house), leading to much higher political interest when compared to earlier waves. This is when they were teens and felt no real interest/eligibilty in the political process, as many would not be financially indepdnent until later waves.
+
+
+
+
+
+
+
+        
